@@ -17,14 +17,12 @@
 package com.github.springtestdbunit;
 
 import java.lang.annotation.Annotation;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.dbunit.database.IDatabaseConnection;
+import org.dbunit.dataset.CompositeDataSet;
 import org.dbunit.dataset.IDataSet;
 import org.dbunit.dataset.ITable;
 import org.springframework.core.annotation.AnnotationUtils;
@@ -148,29 +146,38 @@ class DbUnitRunner {
 			Collection<AnnotationAttributes> annotations) throws Exception {
 		IDatabaseConnection connection = testContext.getConnection();
 		DatabaseOperation lastOperation = null;
+
 		for (AnnotationAttributes annotation : annotations) {
+
+            List<IDataSet> datasetList = new ArrayList<IDataSet>();
+
 			for (String dataSetLocation : annotation.getValue()) {
-				DatabaseOperation operation = annotation.getType();
-				org.dbunit.operation.DatabaseOperation dbUnitDatabaseOperation = getDbUnitDatabaseOperation(
-						testContext, operation, lastOperation);
 				IDataSet dataSet = loadDataset(testContext, dataSetLocation);
-				if (dataSet != null) {
-					if (logger.isDebugEnabled()) {
-						logger.debug("Executing " + (isSetup ? "Setup" : "Teardown") + " of @DatabaseTest using "
-								+ operation + " on " + dataSetLocation);
-					}
-					dbUnitDatabaseOperation.execute(connection, dataSet);
-					lastOperation = operation;
-				}
-			}
-		}
-	}
+                datasetList.add(dataSet);
+            }
+
+            DatabaseOperation operation = annotation.getType();
+            org.dbunit.operation.DatabaseOperation dbUnitDatabaseOperation = getDbUnitDatabaseOperation(
+                    testContext, operation, lastOperation);
+
+            if (!datasetList.isEmpty()) {
+                if (logger.isDebugEnabled()) {
+                    logger.debug("Executing " + (isSetup ? "Setup" : "Teardown") + " of @DatabaseTest using "
+                            + operation + " on " + datasetList.toString());
+                }
+
+                IDataSet dataSet = new CompositeDataSet(datasetList.toArray(new IDataSet[datasetList.size()]));
+                dbUnitDatabaseOperation.execute(connection, dataSet);
+                lastOperation = operation;
+            }
+        }
+    }
 
 	private org.dbunit.operation.DatabaseOperation getDbUnitDatabaseOperation(DbUnitTestContext testContext,
 			DatabaseOperation operation, DatabaseOperation lastOperation) {
-		if ((operation == DatabaseOperation.CLEAN_INSERT) && (lastOperation == DatabaseOperation.CLEAN_INSERT)) {
-			operation = DatabaseOperation.INSERT;
-		}
+//		if ((operation == DatabaseOperation.CLEAN_INSERT) && (lastOperation == DatabaseOperation.CLEAN_INSERT)) {
+//			operation = DatabaseOperation.INSERT;
+//		}
 		org.dbunit.operation.DatabaseOperation databaseOperation = testContext.getDatbaseOperationLookup().get(
 				operation);
 		Assert.state(databaseOperation != null, "The databse operation " + operation + " is not supported");
